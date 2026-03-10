@@ -1761,9 +1761,56 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-if __name__ == "__main__":
-    import uvicorn
+#  STDIO TRANSPORT (for Docker MCP Catalog)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    log.info("Starting BIG-IP MCP Server on port %d with %d tools", MCP_PORT, len(TOOLS))
+async def run_stdio():
+    """Run MCP server over stdio using newline-delimited JSON-RPC."""
+    import sys
+
+    log.info("Starting BIG-IP MCP Server in stdio mode with %d tools", len(TOOLS))
     log.info("BIG-IP target: %s:%s", BIGIP_HOST, BIGIP_PORT)
-    uvicorn.run(app, host="0.0.0.0", port=MCP_PORT, log_level="info")
+
+    loop = asyncio.get_event_loop()
+
+    reader = asyncio.StreamReader()
+    protocol = asyncio.StreamReaderProtocol(reader)
+    await loop.connect_read_pipe(lambda: protocol, sys.stdin.buffer)
+
+    w_transport, w_protocol = await loop.connect_write_pipe(
+        lambda: asyncio.streams.FlowControlMixin(loop=loop), sys.stdout.buffer
+    )
+    writer = asyncio.StreamWriter(w_transport, w_protocol, None, loop)
+
+    while True:
+        line = await reader.readline()
+        if not line:
+            break
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            message = json.loads(line.decode())
+        except json.JSONDecodeError as exc:
+            log.error("Invalid JSON on stdin: %s", exc)
+            continue
+        log.info("stdio message: method=%s", message.get("method"))
+        response = await handle_mcp_message(message)
+        if response:
+            out = json.dumps(response) + "\n"
+            writer.write(out.encode())
+            await writer.drain()
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if __name__ == "__main__":
+    import sys as _sys
+
+    if len(_sys.argv) > 1 and _sys.argv[1] == "stdio":
+        asyncio.run(run_stdio())
+    else:
+        import uvicorn
+
+        log.info("Starting BIG-IP MCP Server on port %d with %d tools", MCP_PORT, len(TOOLS))
+        log.info("BIG-IP target: %s:%s", BIGIP_HOST, BIGIP_PORT)
+        uvicorn.run(app, host="0.0.0.0", port=MCP_PORT, log_level="info")
