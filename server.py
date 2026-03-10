@@ -16,8 +16,10 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Query
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
+import sys as _sys_module
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
+    stream=_sys_module.stderr,
 )
 log = logging.getLogger("bigip-mcp")
 
@@ -1764,8 +1766,33 @@ async def websocket_endpoint(ws: WebSocket):
 #  STDIO TRANSPORT (for Docker MCP Catalog)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+async def _read_message(reader: asyncio.StreamReader) -> dict | None:
+    """Read a single MCP message using Content-Length framing."""
+    # Read headers until empty line
+    content_length = 0
+    while True:
+        header = await reader.readline()
+        if not header:
+            return None  # EOF
+        header = header.decode().strip()
+        if not header:
+            break  # End of headers
+        if header.lower().startswith("content-length:"):
+            content_length = int(header.split(":", 1)[1].strip())
+    if content_length == 0:
+        return None
+    body = await reader.readexactly(content_length)
+    return json.loads(body.decode())
+
+
+def _write_message(data: dict) -> bytes:
+    """Encode a message with Content-Length framing."""
+    body = json.dumps(data)
+    return f"Content-Length: {len(body)}\r\n\r\n{body}".encode()
+
+
 async def run_stdio():
-    """Run MCP server over stdio using newline-delimited JSON-RPC."""
+    """Run MCP server over stdio with Content-Length framing (LSP-style)."""
     import sys
 
     log.info("Starting BIG-IP MCP Server in stdio mode with %d tools", len(TOOLS))
@@ -1777,29 +1804,22 @@ async def run_stdio():
     protocol = asyncio.StreamReaderProtocol(reader)
     await loop.connect_read_pipe(lambda: protocol, sys.stdin.buffer)
 
-    w_transport, w_protocol = await loop.connect_write_pipe(
-        lambda: asyncio.streams.FlowControlMixin(loop=loop), sys.stdout.buffer
+    w_transport, _ = await loop.connect_write_pipe(
+        asyncio.BaseProtocol, sys.stdout.buffer
     )
-    writer = asyncio.StreamWriter(w_transport, w_protocol, None, loop)
 
     while True:
-        line = await reader.readline()
-        if not line:
-            break
-        line = line.strip()
-        if not line:
-            continue
         try:
-            message = json.loads(line.decode())
-        except json.JSONDecodeError as exc:
-            log.error("Invalid JSON on stdin: %s", exc)
-            continue
+            message = await _read_message(reader)
+        except Exception as exc:
+            log.error("Failed to read stdin: %s", exc)
+            break
+        if message is None:
+            break
         log.info("stdio message: method=%s", message.get("method"))
         response = await handle_mcp_message(message)
         if response:
-            out = json.dumps(response) + "\n"
-            writer.write(out.encode())
-            await writer.drain()
+            w_transport.write(_write_message(response))
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
