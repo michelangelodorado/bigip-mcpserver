@@ -1,0 +1,59 @@
+name: bigip
+image: mcp/bigip
+type: server
+meta:
+  category: network
+  tags:
+    - f5
+    - bigip
+    - load-balancer
+    - ltm
+    - network
+    - infrastructure
+about:
+  title: F5 BIG-IP
+  description: Manage F5 BIG-IP devices via iControl REST API — virtual servers, pools, nodes, monitors, iRules, VLANs, GTM, and more.
+  icon: https://www.google.com/s2/favicons?domain=f5.com&sz=64
+source:
+  project: https://github.com/michelangelodorado/bigip-mcpserver
+  commit: 05a92d6831a260e0c85fb7086f57686b63b90e64
+run:
+  command:
+    - stdio
+config:
+  description: Configure the connection to a BIG-IP device
+  secrets:
+    - name: bigip.password
+      env: BIGIP_PASSWORD
+      example: admin
+  env:
+    - name: BIGIP_HOST
+      example: 192.168.1.245
+      value: "{{bigip.host}}"
+    - name: BIGIP_PORT
+      example: "443"
+      value: "{{bigip.port}}"
+    - name: BIGIP_USERNAME
+      example: admin
+      value: "{{bigip.username}}"
+    - name: BIGIP_VERIFY_SSL
+      example: "false"
+      value: "{{bigip.verify_ssl}}"
+  parameters:
+    type: object
+    properties:
+      host:
+        type: string
+        description: BIG-IP management IP address or hostname
+      port:
+        type: integer
+        description: BIG-IP management port
+      username:
+        type: string
+        description: BIG-IP username
+      verify_ssl:
+        type: boolean
+        description: Whether to verify SSL certificates
+    required:
+      - host
+      - username
