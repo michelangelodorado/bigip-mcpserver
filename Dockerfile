@@ -9,5 +9,5 @@ COPY server.py .
 
 EXPOSE 8000
 
-ENTRYPOINT ["python", "server.py"]
+ENTRYPOINT ["python", "-u", "server.py"]
 CMD ["stdio"]

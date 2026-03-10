@@ -1766,60 +1766,52 @@ async def websocket_endpoint(ws: WebSocket):
 #  STDIO TRANSPORT (for Docker MCP Catalog)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async def _read_message(reader: asyncio.StreamReader) -> dict | None:
-    """Read a single MCP message using Content-Length framing."""
-    # Read headers until empty line
-    content_length = 0
-    while True:
-        header = await reader.readline()
-        if not header:
-            return None  # EOF
-        header = header.decode().strip()
-        if not header:
-            break  # End of headers
-        if header.lower().startswith("content-length:"):
-            content_length = int(header.split(":", 1)[1].strip())
-    if content_length == 0:
-        return None
-    body = await reader.readexactly(content_length)
-    return json.loads(body.decode())
-
-
-def _write_message(data: dict) -> bytes:
-    """Encode a message with Content-Length framing."""
-    body = json.dumps(data)
-    return f"Content-Length: {len(body)}\r\n\r\n{body}".encode()
-
-
-async def run_stdio():
+def run_stdio():
     """Run MCP server over stdio with Content-Length framing (LSP-style)."""
     import sys
+
+    stdin = sys.stdin.buffer
+    stdout = sys.stdout.buffer
+    loop = asyncio.new_event_loop()
 
     log.info("Starting BIG-IP MCP Server in stdio mode with %d tools", len(TOOLS))
     log.info("BIG-IP target: %s:%s", BIGIP_HOST, BIGIP_PORT)
 
-    loop = asyncio.get_event_loop()
-
-    reader = asyncio.StreamReader()
-    protocol = asyncio.StreamReaderProtocol(reader)
-    await loop.connect_read_pipe(lambda: protocol, sys.stdin.buffer)
-
-    w_transport, _ = await loop.connect_write_pipe(
-        asyncio.BaseProtocol, sys.stdout.buffer
-    )
-
     while True:
         try:
-            message = await _read_message(reader)
+            # Read headers
+            content_length = 0
+            while True:
+                line = stdin.readline()
+                if not line:
+                    log.info("stdin EOF, shutting down")
+                    return
+                line_str = line.decode().strip()
+                if not line_str:
+                    break  # empty line = end of headers
+                if line_str.lower().startswith("content-length:"):
+                    content_length = int(line_str.split(":", 1)[1].strip())
+
+            if content_length == 0:
+                continue
+
+            # Read body
+            body = stdin.read(content_length)
+            if not body:
+                return
+
+            message = json.loads(body.decode())
+            log.info("stdio: method=%s", message.get("method"))
+
+            response = loop.run_until_complete(handle_mcp_message(message))
+            if response:
+                out = json.dumps(response)
+                frame = f"Content-Length: {len(out)}\r\n\r\n{out}".encode()
+                stdout.write(frame)
+                stdout.flush()
+
         except Exception as exc:
-            log.error("Failed to read stdin: %s", exc)
-            break
-        if message is None:
-            break
-        log.info("stdio message: method=%s", message.get("method"))
-        response = await handle_mcp_message(message)
-        if response:
-            w_transport.write(_write_message(response))
+            log.error("stdio error: %s", exc, exc_info=True)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1829,7 +1821,7 @@ if __name__ == "__main__":
     mode = _sys.argv[1] if len(_sys.argv) > 1 else "stdio"
 
     if mode == "stdio":
-        asyncio.run(run_stdio())
+        run_stdio()
     else:
         import uvicorn
 
