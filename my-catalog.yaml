@@ -1,0 +1,90 @@
+version: 2
+name: bigip-catalog
+displayName: F5 BIG-IP MCP Catalog
+registry:
+  f5-bigip:
+    description: "F5 BIG-IP iControl REST API - Manage virtual servers, pools, nodes, monitors, iRules, VLANs, GTM, and more"
+    title: "F5 BIG-IP"
+    type: server
+    image: bigip-mcp:latest
+    ref: ""
+    source: "https://clouddocs.f5.com/api/icontrol-rest/"
+    icon: ""
+    secrets:
+      - name: BIGIP_PASSWORD
+        env: BIGIP_PASSWORD
+        description: "BIG-IP admin password"
+    tools:
+      - name: get_device_info
+      - name: get_system_provision
+      - name: get_failover_status
+      - name: get_sync_status
+      - name: sync_config
+      - name: save_config
+      - name: get_system_clock
+      - name: get_system_dns
+      - name: get_system_ntp
+      - name: get_system_license
+      - name: list_virtual_servers
+      - name: get_virtual_server
+      - name: create_virtual_server
+      - name: modify_virtual_server
+      - name: delete_virtual_server
+      - name: list_pools
+      - name: get_pool
+      - name: create_pool
+      - name: modify_pool
+      - name: delete_pool
+      - name: list_pool_members
+      - name: add_pool_member
+      - name: remove_pool_member
+      - name: set_pool_member_state
+      - name: list_nodes
+      - name: get_node
+      - name: create_node
+      - name: delete_node
+      - name: set_node_state
+      - name: list_monitors
+      - name: get_monitor
+      - name: list_irules
+      - name: get_irule
+      - name: list_profiles
+      - name: list_persistence_profiles
+      - name: list_data_groups
+      - name: get_data_group
+      - name: list_policies
+      - name: get_policy
+      - name: list_snat_pools
+      - name: list_virtual_addresses
+      - name: list_ssl_certificates
+      - name: list_ssl_keys
+      - name: list_vlans
+      - name: get_vlan
+      - name: create_vlan
+      - name: delete_vlan
+      - name: list_self_ips
+      - name: create_self_ip
+      - name: delete_self_ip
+      - name: list_routes
+      - name: list_interfaces
+      - name: list_trunks
+      - name: list_route_domains
+      - name: list_gtm_wideips
+      - name: get_gtm_wideip
+      - name: list_gtm_pools
+      - name: list_gtm_datacenters
+      - name: list_gtm_servers
+      - name: list_device_groups
+      - name: list_traffic_groups
+      - name: run_bash_command
+    prompts: 0
+    resources: {}
+    metadata:
+      category: network
+      tags:
+        - f5
+        - bigip
+        - load-balancer
+        - ltm
+        - networking
+        - infrastructure
