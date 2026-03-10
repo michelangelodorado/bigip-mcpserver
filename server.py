@@ -1826,7 +1826,9 @@ async def run_stdio():
 if __name__ == "__main__":
     import sys as _sys
 
-    if len(_sys.argv) > 1 and _sys.argv[1] == "stdio":
+    mode = _sys.argv[1] if len(_sys.argv) > 1 else "stdio"
+
+    if mode == "stdio":
         asyncio.run(run_stdio())
     else:
         import uvicorn
